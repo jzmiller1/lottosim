@@ -17,42 +17,54 @@ class LottoGame():
         self.prizes = prizes
 
     @property
-    def repeatable(self):
-        for ball in self.balls:
-            if not self.balls[ball]['repeatable']:
-                return False
-        return True
+    def max_prize(self):
+        prize_keys = self.prizes.keys()
+        if all(isinstance(x, int) for x in prize_keys):
+            return self.prizes[max(prize_keys)]
+        else:
+            return 'variable'
 
     @property
-    def max_prize(self):
-        return self.prizes[max(self.prizes.keys())]
+    def gametype(self):
+        repeatability = [self.balls[ball]['repeatable'] for ball in self.balls]
+        if True in repeatability and False in repeatability:
+            return 'mixed'
+        elif True in repeatability:
+            return 'repeatable'
+        else:
+            return 'nonrepeatable'
+
+    @property
+    def repeatables(self):
+        return [(ball, self.balls[ball]) for ball in self.balls
+                if self.balls[ball]['repeatable'] is True]
+
+    @property
+    def nonrepeatables(self):
+        return [(ball, self.balls[ball]) for ball in self.balls
+                if self.balls[ball]['repeatable'] is False]
 
     def validate_ticket(self, ticket):
 
-        def check_range(ball, number):
-            if ball[1]['min'] <= number <= ball[1]['max']:
+        def check_range(ball_no, number):
+            ball = self.balls[ball_no]
+            if ball['min'] <= number <= ball['max']:
                 return True
+            else:
+                return False
 
-        def check_repeatability(balls):
-            for ball in balls:
-                if not ball[1]['repeatable']:
-                    return False
+        for ball_no, number in enumerate(ticket, start=1):
+            if not check_range(ball_no, number):
+                raise BallOutOfRange
+        if self.gametype == 'repeatable':
             return True
-
-
-        balls = list(self.balls.items())
-        repeatable = check_repeatability(balls)
-        numbers = []
-        for number in ticket:
-            for ball in balls:
-                if not check_range(ball, number):
-                    raise BallOutOfRange
-                if repeatable:
-                    break
-                else:
-                    if ticket.count(ball[0]) > 1 and ball[1]['repeatable'] is False:
-                        raise RepeatedBallValues
-        return True
+        elif self.gametype == 'nonrepeatable' or self.gametype == 'mixed':
+            nonrepeatable_indicies = [ball[0] for ball in self.nonrepeatables]
+            nonrepeatable_numbers = [ticket[i-1] for i in nonrepeatable_indicies]
+            for number in nonrepeatable_numbers:
+                if nonrepeatable_numbers.count(number) > 1:
+                    raise RepeatedBallValues
+            return True
 
     def quickpick(self):
         numbers = []
@@ -68,22 +80,39 @@ class LottoGame():
                     if number not in numbers:
                         selected = number
                 numbers.append(selected)
-        if not self.repeatable:
+        if self.gametype == 'nonrepeatable':
             numbers.sort()
         return tuple(numbers)
 
     def evaluate_ticket(self, ticket, winner):
         if self.validate_ticket(ticket):
-            if self.prizes.get('all') is not None:
+            if self.gametype == 'repeatable':
                 if ticket == winner:
-                    return self.prizes['all']
-            else:
-                if not self.repeatable:
-                    hits = 0
-                    for ball in ticket:
-                        if ball in winner:
-                            hits += 1
+                    return self.max_prize
+                else:
+                    return 0
+            elif self.gametype == 'nonrepeatable':
+                hits = 0
+                for ball in ticket:
+                    if ball in winner:
+                        hits += 1
+                return self.prizes.get(hits, 0)
+            elif self.gametype == 'mixed':
+                nonrepeatable_indicies = [ball[0] - 1 for ball in self.nonrepeatables]
+                repeatable_indicies = [ball[0] - 1 for ball in self.repeatables]
+                hits = 0
+                for i in nonrepeatable_indicies:
+                    if ticket[i] == winner[i]:
+                        hits += 1
+                repeatable_hits = 0
+                for i in repeatable_indicies:
+                    if ticket[i] == winner[i]:
+                        repeatable_hits += 1
+                if repeatable_hits == 0:
                     return self.prizes.get(hits, 0)
+                else:
+                    key = "{}+{}".format(hits, repeatable_hits)
+                    return self.prizes.get(key, 0)
 
 
 def class_based_lotto_sim(game, tickets_sold, rollover=False, rollover_amount=0):
@@ -105,7 +134,7 @@ def class_based_lotto_sim(game, tickets_sold, rollover=False, rollover_amount=0)
     elif winners > 1:
         net -= game.max_prize + rollover_amount
     else:
-        rollover_jackpot =
+        rollover_jackpot = 100
     return tickets_sold, winners, net
 
 
@@ -144,7 +173,11 @@ five_ball = LottoGame(nr_balls, 0.1, prizes)
 if __name__ == '__main__':
     ticket = empire.quickpick()
     empire.evaluate_ticket(ticket, ticket)
-    # class_year_sim(365, empire)
+    import datetime
+    start = datetime.datetime.now()
+    class_year_sim(10, empire)
+    stop = datetime.datetime.now()
+    print(stop-start)
     ticket = five_ball.quickpick()
     close_ticket = [1] + list(ticket[1:])
     not_close_ticket = [1, 1] + list(ticket[2:])
@@ -153,4 +186,4 @@ if __name__ == '__main__':
     print(five_ball.evaluate_ticket(close_ticket, ticket))
     # print(five_ball.evaluate_ticket(not_close_ticket, ticket))
     print(five_ball.evaluate_ticket(bad_ticket, ticket))
-    class_year_sim(365, five_ball)
+    # class_year_sim(5, five_ball)
