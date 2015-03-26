@@ -15,6 +15,7 @@ class LottoGame():
         self.balls = balls
         self.ticket_price = ticket_price
         self.prizes = prizes
+        self.jackpot_rollover = 0
 
     @property
     def max_prize(self):
@@ -115,26 +116,31 @@ class LottoGame():
                     return self.prizes.get(key, 0)
 
 
-def class_based_lotto_sim(game, tickets_sold, rollover=False, rollover_amount=0):
+def class_based_lotto_sim(game, tickets_sold):
     winner = game.quickpick()
     tickets = [game.quickpick() for ticket in range(0, tickets_sold)]
     winners = 0
     payouts = 0
+    if game.max_prize != 'variable':
+        max_prize = game.max_prize
+    else:
+        max_prize = game.prizes.get(len(winner), 0)
     for t in tickets:
         prize = game.evaluate_ticket(t, winner)
         if prize is not None:
-            if prize == game.max_prize:
+            if prize == max_prize:
                 winners += 1
             else:
                 payouts += prize
     income = game.ticket_price * tickets_sold
-    net = income - payouts
-    if winners == 1:
-        net -= game.max_prize + rollover_amount
-    elif winners > 1:
-        net -= game.max_prize + rollover_amount
+    if winners > 0:
+        jackpot = max_prize + game.jackpot_rollover + income/2.0
+        payouts += jackpot
+        game.jackpot_rollover = 0
     else:
-        rollover_jackpot = 100
+        game.jackpot_rollover += income/2.0
+    net = income - payouts
+    print("Jackpot Rollover: {}".format(game.jackpot_rollover))
     return tickets_sold, winners, net
 
 
@@ -150,40 +156,3 @@ def class_year_sim(numlottos, game):
     print("total tickets {}, total wins {}, total net {}".format(total_tickets,
                                                                  total_wins,
                                                                  total_net))
-
-balls = {1: {'max': 9, 'min': 1, 'repeatable': True},
-         2: {'max': 9, 'min': 1, 'repeatable': True},
-         3: {'max': 9, 'min': 1, 'repeatable': True},
-         4: {'max': 9, 'min': 1, 'repeatable': True}}
-
-nr_balls = {1: {'max': 55, 'min': 1, 'repeatable': False},
-            2: {'max': 55, 'min': 1, 'repeatable': False},
-            3: {'max': 55, 'min': 1, 'repeatable': False},
-            4: {'max': 55, 'min': 1, 'repeatable': False},
-            5: {'max': 55, 'min': 1, 'repeatable': False}}
-
-empire_prizes = {'all': 100}
-
-prizes = {5: 100,
-          4: 10}
-
-empire = LottoGame(balls, 0.1, empire_prizes)
-five_ball = LottoGame(nr_balls, 0.1, prizes)
-
-if __name__ == '__main__':
-    ticket = empire.quickpick()
-    empire.evaluate_ticket(ticket, ticket)
-    import datetime
-    start = datetime.datetime.now()
-    class_year_sim(10, empire)
-    stop = datetime.datetime.now()
-    print(stop-start)
-    ticket = five_ball.quickpick()
-    close_ticket = [1] + list(ticket[1:])
-    not_close_ticket = [1, 1] + list(ticket[2:])
-    bad_ticket = [1, 2] + list(ticket[2:])
-    print(five_ball.evaluate_ticket(ticket, ticket))
-    print(five_ball.evaluate_ticket(close_ticket, ticket))
-    # print(five_ball.evaluate_ticket(not_close_ticket, ticket))
-    print(five_ball.evaluate_ticket(bad_ticket, ticket))
-    # class_year_sim(5, five_ball)
